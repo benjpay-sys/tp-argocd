@@ -22,7 +22,7 @@ spec:
   source:
     repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
     targetRevision: main
-    path: platform/apps/dev
+    path: platform/apps
     directory:
       recurse: true
 
