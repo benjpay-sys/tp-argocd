@@ -18,8 +18,9 @@ metadata:
 spec:
   generators:
     - list:
-        - branch: main
-          branch_slug: feature-demo-prof
+        elements:
+          - branch: main
+            branch_slug: feature-demo-prof
 
   template:
     metadata:
