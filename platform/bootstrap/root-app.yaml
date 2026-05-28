@@ -20,12 +20,8 @@ spec:
   project: devhub
 
   source:
-    # TODO : remplacez par l'URL HTTPS de votre fork de ce repo.
-    repoURL: https://github.com/<votre-handle>/devhub-campus.git
+    repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
     targetRevision: main
-    # TODO : indiquez ici le chemin où ArgoCD va chercher les manifestes
-    # YAML à appliquer. Réfléchissez à ce qui doit (et ne doit pas) être
-    # dans ce dossier.
     path: platform/apps/dev
     directory:
       recurse: true
@@ -34,12 +30,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
 
-  # TODO : configurez la sync policy.
-  # Question à vous poser : pour la root, voulez-vous selfHeal:true ?
-  # Et prune:true ? Justifiez vos choix dans RAPPORT.md.
   syncPolicy:
     automated:
-      prune: false
-      selfHeal: false
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
