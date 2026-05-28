@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         {{- include "annuaire.labels" . | nindent 8 }}
+    spec:
       securityContext:
         runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
         runAsUser: {{ .Values.securityContext.runAsUser }}
