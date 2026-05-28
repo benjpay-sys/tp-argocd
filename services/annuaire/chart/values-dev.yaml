@@ -8,5 +8,5 @@ ingress:
 env:
   LOG_LEVEL: debug
 
-# TODO : si vous voulez une seule réplique en dev pour économiser des ressources,
-# surchargez replicaCount ici.
+# Surcharge replicaCount en dev pour économiser des ressources
+replicaCount: 1

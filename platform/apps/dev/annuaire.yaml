@@ -14,14 +14,10 @@ spec:
   project: devhub
 
   source:
-    # TODO : URL de votre fork.
-    repoURL: https://github.com/<votre-handle>/devhub-campus.git
+    repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
     targetRevision: main
-    # TODO : chemin vers le chart Helm du service.
     path: services/annuaire/chart
     helm:
-      # TODO : pointez vers le bon fichier de values.
-      # Indice : il y en a un par environnement.
       valueFiles:
         - values-dev.yaml
 
@@ -30,8 +26,6 @@ spec:
     namespace: devhub-dev
 
   syncPolicy:
-    # TODO étape 5 : commencez en manuel (commentez le bloc automated).
-    # Puis basculez en auto avec selfHeal:true / prune:false une fois validé.
     automated:
       prune: false
       selfHeal: true

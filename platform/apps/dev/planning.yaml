@@ -14,8 +14,7 @@ spec:
   project: devhub
 
   source:
-    # TODO : URL de votre fork.
-    repoURL: https://github.com/<votre-handle>/devhub-campus.git
+    repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
     targetRevision: main
     path: services/planning/chart
     helm:

@@ -1,6 +1,6 @@
 image:
-  repository: ghcr.io/<votre-handle>/planning
-  tag: ""
+  repository: ghcr.io/utilisateur/planning
+  tag: "8f47eb0"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
