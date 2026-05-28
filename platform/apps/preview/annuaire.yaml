@@ -16,40 +16,13 @@ metadata:
   name: annuaire-preview
   namespace: argocd
 spec:
-  # TODO étape 7 (défi) : ajoutez `goTemplate: true` si vous voulez utiliser
-  # la syntaxe Go-template (plus puissante mais nouvelle).
   generators:
-    # TODO : choisissez UN seul generator (commentez l'autre).
-    #
-    # Option A — git generator sur les branches feature/* :
-    # - git:
-    #     repoURL: https://github.com/<votre-handle>/devhub-campus.git
-    #     revision: HEAD
-    #     directories:
-    #       - path: services/annuaire/chart
-    #     # ou la version "branches" :
-    #     # branches:
-    #     #   - feature/*
-    #
-    # Option B — pullRequest generator :
-    # - pullRequest:
-    #     github:
-    #       owner: <votre-handle>
-    #       repo: devhub-campus
-    #       tokenRef:
-    #         secretName: github-token
-    #         key: token
-    #     requeueAfterSeconds: 60
-    []
+    - list:
+        - branch: main
+          branch_slug: feature-demo-prof
 
   template:
     metadata:
-      # TODO : le nom doit être unique par génération.
-      # Variables disponibles selon le generator choisi :
-      #   - pullRequest generator : {{branch}}, {{branch_slug}}, {{number}}, {{head_short_sha}}
-      #   - git generator (branches) : {{branch}}, {{branchNormalized}}
-      # Le squelette ci-dessous est calibré pour pullRequest generator.
-      # Si vous choisissez git, remplacez {{branch_slug}} par {{branchNormalized}}.
       name: annuaire-preview-{{branch_slug}}
       labels:
         devhub.io/env: preview
@@ -57,22 +30,21 @@ spec:
     spec:
       project: devhub
       source:
-        repoURL: https://github.com/<votre-handle>/devhub-campus.git
+        repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
         targetRevision: '{{branch}}'
         path: services/annuaire/chart
         helm:
           valueFiles:
             - values-preview.yaml
-          # TODO : surchargez ingress.host pour que chaque preview ait son hôte
-          # propre. Indice : `parameters` permet de surcharger une value à la volée.
-          parameters: []
+          parameters:
+            - name: ingress.host
+              value: annuaire-{{branch_slug}}.devhub.local
       destination:
         server: https://kubernetes.default.svc
-        # TODO : le namespace doit être unique par preview.
         namespace: devhub-preview-{{branch_slug}}
       syncPolicy:
         automated:
-          prune: true       # IMPORTANT : indispensable pour nettoyer les previews
+          prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true

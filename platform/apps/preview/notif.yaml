@@ -7,7 +7,10 @@ metadata:
   name: notif-preview
   namespace: argocd
 spec:
-  generators: []
+  generators:
+    - list:
+        - branch: main
+          branch_slug: feature-demo-prof
   template:
     metadata:
       name: notif-preview-{{branch_slug}}
@@ -17,13 +20,15 @@ spec:
     spec:
       project: devhub
       source:
-        repoURL: https://github.com/<votre-handle>/devhub-campus.git
+        repoURL: http://local-git-server.argocd.svc/git/devhub-campus.git
         targetRevision: '{{branch}}'
         path: services/notif/chart
         helm:
           valueFiles:
             - values-preview.yaml
-          parameters: []
+          parameters:
+            - name: ingress.host
+              value: notif-{{branch_slug}}.devhub.local
       destination:
         server: https://kubernetes.default.svc
         namespace: devhub-preview-{{branch_slug}}
