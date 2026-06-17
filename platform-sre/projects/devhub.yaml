@@ -29,6 +29,8 @@ spec:
       namespace: argo-rollouts
     - server: https://kubernetes.default.svc
       namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
 
   clusterResourceWhitelist:
     - group: ""
