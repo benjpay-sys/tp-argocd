@@ -40,6 +40,16 @@ monitoring:
 # de secours pour démarrer. Passez à false dès que rollout.yaml est en place.
 useDeployment: true
 
+# Configuration du Rollout canary (étape 5+). Ignoré si useDeployment: true.
+rollout:
+  canary:
+    steps:
+      - setWeight: 20
+      - pause: {duration: 30s}
+      - setWeight: 50
+      - pause: {duration: 30s}
+      - setWeight: 100
+
 resources:
   requests:
     cpu: 50m

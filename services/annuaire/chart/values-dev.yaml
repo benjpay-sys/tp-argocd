@@ -15,3 +15,5 @@ env:
 
 monitoring:
   enabled: true
+
+useDeployment: false

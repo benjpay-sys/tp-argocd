@@ -200,4 +200,95 @@ désactivé) — conforme à la convention RED documentée dans le poly.
 
 ---
 
-*(sections suivantes à compléter au fil des étapes 3 à 12)*
+## Étape 3 — kube-prometheus-stack via ArgoCD
+
+Chart installé : `prometheus-community/kube-prometheus-stack` version **65.5.0**, releaseName `kps`.
+
+Fichiers GitOps produits :
+- `platform-sre/apps/observability/kube-prometheus-stack.yaml` — Application ArgoCD
+- `platform-sre/values/kube-prometheus-stack-values.yaml` — values du chart
+
+Choix opérationnels :
+
+| Sous-composant | Activé | Raison |
+|---|---|---|
+| Prometheus Operator | ✓ | requis |
+| Prometheus | ✓ | requis |
+| Alertmanager | ✓ | requis |
+| Grafana | ✓ | requis |
+| node-exporter | ✓ | métriques infra nœud |
+| kube-state-metrics | ✓ | métriques objets K8s |
+| admissionWebhooks | ✗ | kind ne supporte pas les webhooks TLS sans cert-manager |
+| kubeControllerManager / kubeScheduler / kubeEtcd | ✗ | kind n'expose pas la control-plane sur les ports attendus |
+
+Ajustement critique pour kind : `prometheusOperator.tls.enabled: false` — sans ça, l'opérateur
+cherche un secret `kps-admission` jamais créé (puisque le job patch admission webhook est désactivé)
+et reste en `ContainerCreating` indéfiniment.
+
+Le mot de passe Grafana est **hors Git** : un `Secret` Kubernetes `grafana-admin-secret` a été
+créé manuellement dans le namespace `monitoring` ; le chart le référence via
+`grafana.admin.existingSecret`. Aucun mot de passe en clair dans les fichiers versionné.
+
+Prometheus est configuré avec `serviceMonitorSelectorNilUsesHelmValues: false` et un
+`serviceMonitorSelector.matchLabels.release: kps` pour découvrir les ServiceMonitors dans
+n'importe quel namespace du cluster (pas uniquement dans `monitoring`).
+
+**Validation** : tous les pods `monitoring` sont `Running` ; l'UI Prometheus répond sur
+`http://prometheus.devhub.local` ; Grafana répond sur `http://grafana.devhub.local` ;
+`Status → Targets` montre `kube-state-metrics`, `node-exporter` et l'API K8s comme cibles `UP`.
+
+---
+
+## Étape 4 — ServiceMonitor + dashboard Grafana
+
+### ServiceMonitor
+
+Un template `chart/templates/servicemonitor.yaml` a été ajouté dans les trois charts (annuaire,
+planning, notif). Il est conditionnel (`monitoring.enabled: true` dans `values-dev.yaml`).
+
+Mécanisme de découverte : le Service K8s se voit ajouter le label `release: kps` quand
+`monitoring.enabled` est vrai. Le `serviceMonitorSelector` du chart kube-prometheus-stack filtre
+sur ce label. C'est le point le plus souvent oublié (piège documenté dans l'annexe B du poly).
+
+Les trois ServiceMonitors apparaissent dans `Status → Targets` de Prometheus avec `UP=1`.
+
+### PromQL des 4 panneaux du dashboard `services-red.json`
+
+**Panneau 1 — Request Rate (RPS)**
+```promql
+sum(rate(http_requests_total{namespace="$namespace", job="$service"}[5m])) by (route, status_class)
+```
+Donne le débit entrant par route et classe de statut. Sert le SLI disponibilité : si le compteur
+de 2xx s'effondre, l'error rate monte.
+
+**Panneau 2 — Error Rate (ratio 5xx)**
+```promql
+sum(rate(http_requests_total{namespace="$namespace", job="$service", status_class="5xx"}[5m]))
+/
+sum(rate(http_requests_total{namespace="$namespace", job="$service"}[5m]))
+```
+Ratio directement comparable au SLO de disponibilité. Seuil de couleur à 1 % (rouge au-delà).
+
+**Panneau 3 — Latence p50/p95/p99**
+```promql
+histogram_quantile(0.95,
+  sum(rate(http_request_duration_seconds_bucket{namespace="$namespace", job="$service"}[5m])) by (le)
+)
+```
+Le `sum(...) by (le)` est indispensable pour agréger les instances avant le calcul du quantile
+— sans lui on obtient un quantile par pod, illisible et non représentatif du SLI service.
+Le panneau trace aussi p50 et p99 pour le contexte (p50 indique la médiane, p99 les outliers).
+
+**Panneau 4 — Build Info (version active)**
+```promql
+max by (version, commit, language) (annuaire_build_info{namespace="$namespace"})
+or max by (version, commit, language) (planning_build_info{namespace="$namespace"})
+or max by (version, commit, language) (notif_build_info{namespace="$namespace"})
+```
+Gauge constante = 1 ; la valeur importe peu, ce sont les labels qui portent l'information
+(`version`, `commit`, `language`). Afficher ce panneau dans le dashboard permet de savoir
+immédiatement quel tag d'image est actif sans quitter Grafana.
+
+Dashboard exporté : `platform-sre/dashboards/services-red.json`
+
+---

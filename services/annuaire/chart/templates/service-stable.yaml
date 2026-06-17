@@ -1,8 +1,8 @@
-{{- if .Values.useDeployment }}
+{{- if not .Values.useDeployment }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "annuaire.fullname" . }}
+  name: {{ include "annuaire.fullname" . }}-stable
   labels:
     {{- include "annuaire.labels" . | nindent 4 }}
     {{- if .Values.monitoring.enabled }}

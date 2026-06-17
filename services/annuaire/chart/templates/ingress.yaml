@@ -15,7 +15,11 @@ spec:
             pathType: Prefix
             backend:
               service:
+                {{- if .Values.useDeployment }}
                 name: {{ include "annuaire.fullname" . }}
+                {{- else }}
+                name: {{ include "annuaire.fullname" . }}-stable
+                {{- end }}
                 port:
                   number: {{ .Values.service.port }}
 {{- end }}
