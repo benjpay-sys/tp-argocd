@@ -25,6 +25,23 @@ spec:
     server: https://kubernetes.default.svc
     namespace: devhub-dev
 
+  # ArgoCD SSA owning spec.selector conflicts with Argo Rollouts injecting
+  # rollout-pod-template-hash into the active/preview service selectors.
+  # These ignoreDifferences entries let the Rollout controller own the selector.
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: planning-dev-planning-active
+      namespace: devhub-dev
+      jsonPointers:
+        - /spec/selector
+    - group: ""
+      kind: Service
+      name: planning-dev-planning-preview
+      namespace: devhub-dev
+      jsonPointers:
+        - /spec/selector
+
   syncPolicy:
     automated:
       prune: false
@@ -32,3 +49,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
