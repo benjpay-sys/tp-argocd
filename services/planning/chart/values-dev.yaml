@@ -1,6 +1,11 @@
 # Surcharges pour l'environnement de développement (namespace devhub-dev).
 # Ne mettez ICI que ce qui diffère de values.yaml.
 
+image:
+  repository: host.docker.internal:5001/planning
+  tag: tp3-202606170940
+  pullPolicy: Always
+
 ingress:
   enabled: true
   host: planning.devhub.local
@@ -8,6 +13,5 @@ ingress:
 env:
   LOG_LEVEL: debug
 
-# En étape 4 vous activerez le ServiceMonitor :
-# monitoring:
-#   enabled: true
+monitoring:
+  enabled: true
