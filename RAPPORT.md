@@ -292,3 +292,82 @@ immédiatement quel tag d'image est actif sans quitter Grafana.
 Dashboard exporté : `platform-sre/dashboards/services-red.json`
 
 ---
+
+## Étape 5 — Du Deployment au Rollout (annuaire, canary)
+
+**Argo Rollouts** est installé via l'Application ArgoCD `platform-sre/apps/observability/argo-rollouts.yaml`
+(chart `argo/argo-rollouts`, namespace `argo-rollouts`).
+
+Le chart `annuaire` a été modifié :
+- `rollout.yaml` remplace `deployment.yaml` (`{{- if not .Values.useDeployment }}` ; le Deployment ne
+  s'affiche plus quand `useDeployment: false`)
+- `service.yaml` devient conditionnel (`{{- if .Values.useDeployment }}`) pour éviter la coexistence
+- `service-stable.yaml` + `service-canary.yaml` créés pour le split de trafic
+- `ingress.yaml` pointe vers `<fullname>-stable` quand `useDeployment: false`
+- `values-dev.yaml` : `useDeployment: false`
+
+Stratégie canary étape 5 (test) : `setWeight:20 → pause:30s → setWeight:50 → pause:30s → setWeight:100`.
+
+**Validation observée** : le canary `tp3-v2` a passé successivement 20 %, 50 % (pauses automatiques),
+puis 100 % ; `kubectl argo rollouts get rollout` a montré à chaque étape le poids actuel et le status
+`Paused → Healthy`. L'ancienne revision (v1) a été scale-down après la promotion.
+
+**Piège évité** : après le premier sync, le Deployment ET le Rollout coexistaient (`prune: false` dans
+la syncPolicy ArgoCD). Le Deployment orphelin a été supprimé manuellement (`kubectl delete deployment`)
+— cas documenté dans l'Annexe B du poly.
+
+---
+
+## Étape 6 — Pilotage manuel du canary (pause/promote/abort)
+
+Étapes du Rollout pour le pilotage manuel :
+```
+setWeight: 10 → pause: {} (infini) → setWeight: 50 → pause: {duration: 1m} → setWeight: 100
+```
+
+### Scénario 1 — Promotion normale
+
+```
+kubectl argo rollouts get rollout annuaire-dev-annuaire -n devhub-dev
+# → Status: Paused, Step 1/5, SetWeight: 10 (canary tp3-v3)
+
+kubectl argo rollouts promote annuaire-dev-annuaire -n devhub-dev
+# → rollout promoted — passe à Step 3/5, SetWeight: 50, pause 1m, puis Healthy à 100%
+```
+
+**Observation** : la commande `promote` avance le Rollout d'une étape de pause manuelle à la fois ;
+le Rollout attend automatiquement la pause temporisée de 1 min avant de passer à 100 %.
+
+### Scénario 2 — Annulation explicite (abort)
+
+```
+kubectl argo rollouts get rollout annuaire-dev-annuaire -n devhub-dev
+# → Status: Paused, Step 1/5, SetWeight: 10 (canary tp3-v4)
+
+kubectl argo rollouts abort annuaire-dev-annuaire -n devhub-dev
+# → rollout aborted — Status: Degraded, SetWeight: 0, tout le trafic sur stable (tp3-v3)
+```
+
+**Observation** : le poids canary descend immédiatement à 0, le pod canary reste en vie mais ne reçoit
+plus de trafic (via ingress-nginx). Le Rollout est en état `Degraded` car Git pointe toujours vers
+`tp3-v4`. Pour réaligner : `git revert HEAD + push` → ArgoCD sync → `kubectl argo rollouts retry rollout`.
+
+### Scénario 3 — Promotion forcée (`--full`)
+
+```
+kubectl argo rollouts get rollout annuaire-dev-annuaire -n devhub-dev
+# → Status: Paused, Step 1/5, SetWeight: 10 (canary tp3-v5)
+
+kubectl argo rollouts promote annuaire-dev-annuaire -n devhub-dev --full
+# → rollout fully promoted — toutes les étapes sautées, Status: Healthy à 100% immédiatement
+```
+
+**Quand `promote --full` est acceptable en production ?**
+C'est justifié en cas d'urgence réelle : un incident de production en cours, une régression avérée
+sur la version stable qui nécessite que la nouvelle version prenne le trafic immédiatement (ex.
+correctif de sécurité). Les précautions : (1) documenter la décision dans le canal d'astreinte pour
+traçabilité, (2) surveiller activement les métriques les 5 minutes suivantes, (3) ne jamais l'utiliser
+pour « gagner du temps » sur un déploiement normal — la valeur du canary est précisément d'observer
+sous trafic partiel.
+
+---
