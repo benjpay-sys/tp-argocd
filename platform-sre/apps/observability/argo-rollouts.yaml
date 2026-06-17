@@ -26,7 +26,7 @@ spec:
         valueFiles:
           - $values/platform-sre/values/argo-rollouts-values.yaml
     - repoURL: https://github.com/benjpay-sys/tp-argocd.git
-      targetRevision: main
+      targetRevision: tp3
       ref: values
 
   destination:

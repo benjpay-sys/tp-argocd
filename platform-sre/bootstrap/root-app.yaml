@@ -17,7 +17,7 @@ spec:
 
   source:
     repoURL: https://github.com/benjpay-sys/tp-argocd.git
-    targetRevision: main
+    targetRevision: tp3
     path: platform-sre/apps
     directory:
       recurse: true
