@@ -3,7 +3,7 @@
 
 image:
   repository: host.docker.internal:5001/annuaire
-  tag: tp3-v4
+  tag: tp3-v3
   pullPolicy: Always
 
 ingress:
