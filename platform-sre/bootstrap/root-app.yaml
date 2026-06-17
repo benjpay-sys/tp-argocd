@@ -1,0 +1,37 @@
+# Root Application (pattern App of Apps) — version TP 3.
+#
+# C'est la SEULE Application que vous créez à la main avec `kubectl apply`.
+# Tout le reste sera créé par elle, à partir des fichiers de `platform-sre/apps/`.
+#
+# Référence : https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devhub
+
+  source:
+    repoURL: https://github.com/benjpay-sys/tp-argocd.git
+    targetRevision: main
+    path: platform-sre/apps
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  # selfHeal: false sur la root volontairement — on ne veut pas qu'ArgoCD
+  # recrée automatiquement une Application supprimée manuellement (nettoyage).
+  # prune: false pour éviter de supprimer des apps enfant lors d'un sync partiel.
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
