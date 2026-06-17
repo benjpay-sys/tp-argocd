@@ -17,6 +17,7 @@ ingress:
   enabled: true
   className: nginx
   host: planning.devhub.local
+  previewHost: planning-preview.devhub.local
   path: /
 
 env:

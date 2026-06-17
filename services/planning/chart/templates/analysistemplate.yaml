@@ -1,0 +1,48 @@
+{{- if not .Values.useDeployment }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "planning.fullname" . }}-sre
+  labels:
+    {{- include "planning.labels" . | nindent 4 }}
+spec:
+  metrics:
+    - name: error-rate
+      interval: 30s
+      count: 4
+      failureLimit: 1
+      successCondition: result[0] == 0 || result[0] < 0.01
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{
+              namespace="{{ .Release.Namespace }}",
+              service="{{ include "planning.fullname" . }}-preview",
+              status_class="5xx"
+            }[2m]))
+            /
+            (
+              sum(rate(http_requests_total{
+                namespace="{{ .Release.Namespace }}",
+                service="{{ include "planning.fullname" . }}-preview"
+              }[2m])) > 0
+            )
+            or vector(0)
+
+    - name: latency-p95
+      interval: 30s
+      count: 4
+      failureLimit: 1
+      successCondition: isNaN(result[0]) || result[0] < 0.3
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{
+                namespace="{{ .Release.Namespace }}",
+                service="{{ include "planning.fullname" . }}-preview"
+              }[2m])) by (le)
+            )
+{{- end }}
