@@ -3,7 +3,7 @@
 
 image:
   repository: host.docker.internal:5001/planning
-  tag: tp3-202606170940
+  tag: tp3-v2
   pullPolicy: Always
 
 ingress:
