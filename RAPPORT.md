@@ -371,3 +371,132 @@ pour « gagner du temps » sur un déploiement normal — la valeur du canary es
 sous trafic partiel.
 
 ---
+
+## Étape 7 — AnalysisTemplate : promotion sur preuve (annuaire)
+
+L'`AnalysisTemplate` `annuaire-dev-annuaire-sre` interroge Prometheus toutes les 30 s pendant 5 min
+(10 mesures, `failureLimit: 1`). Deux métriques :
+
+**Taux d'erreur (canary)**
+```promql
+sum(rate(http_requests_total{
+  namespace="devhub-dev", service="annuaire-dev-annuaire-canary", status_class="5xx"
+}[2m]))
+/
+(sum(rate(http_requests_total{
+  namespace="devhub-dev", service="annuaire-dev-annuaire-canary"
+}[2m])) > 0)
+or vector(0)
+```
+`successCondition: result[0] == 0 || result[0] < 0.01` — seuil 1 %.
+Le `or vector(0)` évite le `NaN` quand il n'y a pas encore de trafic.
+
+**Latence p95 (canary)**
+```promql
+histogram_quantile(0.95,
+  sum(rate(http_request_duration_seconds_bucket{
+    namespace="devhub-dev", service="annuaire-dev-annuaire-canary"
+  }[2m])) by (le)
+)
+```
+`successCondition: isNaN(result[0]) || result[0] < 0.3` — seuil SLO 300 ms.
+
+Le label `service` filtre spécifiquement le service canary (distinct du stable dans Prometheus grâce
+aux deux ServiceMonitor endpoints). L'Analysis est placée en step 4 entre `setWeight:25` et `setWeight:50`.
+
+**Résultat observé** — AnalysisRun `…-7-3` : Successful (latency-p95=0.047 s, error-rate=0).
+Promotion automatique vers `tp3-v6` sans intervention humaine.
+
+**Choix des seuils et durée** : 1 % d'erreur et p95 < 300 ms correspondent aux SLOs définis en
+étape 1. La durée de 5 min (10 × 30 s) est un compromis : assez long pour filtrer les pics
+transitoires, assez court pour ne pas ralentir inutilement le pipeline. Sur du trafic réel plus
+soutenu, on pourrait descendre à 3 min.
+
+---
+
+## Étape 8 — Blue/Green : planning
+
+### Stratégie et architecture
+
+Le service `planning` est migré en **BlueGreen** :
+- `service-active.yaml` (avec label `release: kps` pour le scraping) = trafic production
+- `service-preview.yaml` = nouvelle version avant bascule
+- `ingress-preview.yaml` → `planning-preview.devhub.local` (accès interne équipe)
+- `ingress.yaml` → `<fullname>-active` quand `useDeployment: false`
+- `autoPromotionEnabled: false` → bascule toujours manuelle
+- `scaleDownDelaySeconds: 300` → ancienne version garde ses pods 5 min après bascule
+- `prePromotionAnalysis` : même AnalysisTemplate que canary (error-rate + latency-p95),
+  interroge `service="{{ fullname }}-preview"`, 4 mesures × 30 s = 2 min
+
+### Piège ArgoCD SSA + Argo Rollouts
+
+Argo Rollouts injecte le label `rollout-pod-template-hash=<hash>` dans les sélecteurs des services
+active et preview pour les différencier. Avec `ServerSideApply=true` dans ArgoCD, le champ
+`spec.selector` est possédé par `argocd-controller`, ce qui empêche `rollouts-controller` de le modifier.
+
+**Conséquence** : sans le hash, les deux services routaient vers TOUS les pods — le contrôleur ne
+voyait jamais de transition stable→preview et traitait chaque déploiement comme un « Initial deploy »,
+bypassing l'analysis et auto-promouvant immédiatement.
+
+**Fix** : `ignoreDifferences` + `RespectIgnoreDifferences=true` dans l'Application ArgoCD :
+
+```yaml
+ignoreDifferences:
+  - group: ""
+    kind: Service
+    name: planning-dev-planning-active
+    namespace: devhub-dev
+    jsonPointers:
+      - /spec/selector
+  - group: ""
+    kind: Service
+    name: planning-dev-planning-preview
+    namespace: devhub-dev
+    jsonPointers:
+      - /spec/selector
+syncOptions:
+  - RespectIgnoreDifferences=true
+```
+
+### Démonstration bascule manuelle (tp3-v5)
+
+**État avant promote** :
+```
+Status: Paused (BlueGreenPause)
+tp3-v4 (stable, active)
+tp3-v5 (preview)
+AnalysisRun planning-dev-planning-79f588b48c-5-pre: Successful (8 mesures)
+```
+
+```bash
+# Validation preview avant bascule
+curl http://planning-preview.devhub.local/readyz
+# → 200 OK {"ok":true,"service":"planning"}
+
+# Bascule manuelle
+kubectl argo rollouts promote planning-dev-planning -n devhub-dev
+# → rollout 'planning-dev-planning' promoted
+```
+
+**État après promote** :
+```
+Status: Healthy
+tp3-v5 (stable, active)
+tp3-v4 (delay:4m48s → ScaledDown après 300 s)
+```
+
+### Comparatif Canary vs BlueGreen
+
+| Critère | Canary | BlueGreen |
+|---|---|---|
+| Exposition au risque | Fraction du trafic (5–20 %) | 0 % pendant le test (preview isolé) |
+| Ressources | Normale + quelques pods canary | Double capacité pendant la bascule |
+| Rollback | Trafic redescend vers stable | Ancienne version encore active 5 min |
+| Validation | Métriques sur trafic réel | Test interne sur preview |
+| Cas d'usage | Services stateless à fort volume | Services critiques, migrations lourdes |
+
+**BlueGreen plutôt que canary quand** : (1) le service a un état partagé (DB schema, sessions) que
+deux versions simultanées ne peuvent pas gérer ; (2) on veut une validation QA complète sur la
+nouvelle version avant d'exposer le moindre utilisateur réel.
+
+---
