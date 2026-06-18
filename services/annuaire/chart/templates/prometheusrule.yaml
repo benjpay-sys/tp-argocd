@@ -26,7 +26,7 @@ spec:
                 service="{{ include "annuaire.fullname" . }}-stable"
               }[5m]))
             ) > 0.01
-          for: 5m
+          for: 1m
           labels:
             severity: page
             service: annuaire
