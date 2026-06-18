@@ -3,7 +3,7 @@
 
 image:
   repository: host.docker.internal:5001/annuaire
-  tag: tp3-v6
+  tag: tp3-v7
   pullPolicy: Always
 
 ingress:
@@ -17,3 +17,8 @@ monitoring:
   enabled: true
 
 useDeployment: false
+
+rollout:
+  canary:
+    headerRouting:
+      enabled: true

@@ -65,6 +65,11 @@ spec:
       trafficRouting:
         nginx:
           stableIngress: {{ include "annuaire.fullname" . }}
+          {{- if .Values.rollout.canary.headerRouting.enabled }}
+          additionalIngressAnnotations:
+            nginx.ingress.kubernetes.io/canary-by-header: {{ .Values.rollout.canary.headerRouting.header | quote }}
+            nginx.ingress.kubernetes.io/canary-by-header-value: {{ .Values.rollout.canary.headerRouting.headerValue | quote }}
+          {{- end }}
       steps:
         {{- toYaml .Values.rollout.canary.steps | nindent 8 }}
 {{- end }}

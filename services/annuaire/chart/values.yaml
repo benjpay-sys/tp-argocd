@@ -43,6 +43,12 @@ useDeployment: true
 # Configuration du Rollout canary (étape 5+). Ignoré si useDeployment: true.
 rollout:
   canary:
+    # Routing par header (étape 9). Quand enabled, les requêtes portant
+    # `header: headerValue` vont TOUJOURS vers le canary, indépendamment du weight.
+    headerRouting:
+      enabled: false
+      header: X-Beta-User
+      headerValue: "true"
     steps:
       - setWeight: 10
       - pause: {}
