@@ -26,6 +26,23 @@ spec:
     server: https://kubernetes.default.svc
     namespace: devhub-dev
 
+  # Argo Rollouts doit injecter rollout-pod-template-hash dans spec.selector
+  # des services canary/stable. SSA bloquerait cette injection — on cède la
+  # propriété du sélecteur au rollouts-controller.
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: annuaire-dev-annuaire-canary
+      namespace: devhub-dev
+      jsonPointers:
+        - /spec/selector
+    - group: ""
+      kind: Service
+      name: annuaire-dev-annuaire-stable
+      namespace: devhub-dev
+      jsonPointers:
+        - /spec/selector
+
   syncPolicy:
     automated:
       prune: false
@@ -33,3 +50,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
