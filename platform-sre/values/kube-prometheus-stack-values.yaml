@@ -66,10 +66,63 @@ prometheus:
 # ---- Alertmanager ----
 alertmanager:
   enabled: true
-  # TODO étape 10 : votre configuration Alertmanager (routes, receivers).
-  # Tant que vide, le sous-chart utilise une config par défaut qui ne route
-  # nulle part.
-  config: {}
+  config:
+    global:
+      # Résolution d'une alerte considérée résolue si elle n'est plus firing
+      # pendant ce délai. 5 min est une bonne valeur pour le TP.
+      resolve_timeout: 5m
+
+    route:
+      # Regrouper les alertes par service et namespace pour éviter le flood.
+      group_by: ["alertname", "service", "namespace"]
+      # Attendre 30 s avant d'envoyer le premier groupe d'alertes.
+      group_wait: 30s
+      # Attendre 5 min avant d'envoyer un nouveau groupe pour le même groupe.
+      group_interval: 5m
+      # Renvoyer l'alerte toutes les 4 h si elle reste firing.
+      repeat_interval: 4h
+      # Receiver par défaut (blackhole — les alertes sans route atterrissent ici)
+      receiver: blackhole
+      routes:
+        # Alertes critiques → page (réveille)
+        - matchers:
+            - name: severity
+              value: page
+          receiver: webhook-page
+          group_wait: 10s
+          repeat_interval: 1h
+        # Alertes non critiques → ticket (attend lundi)
+        - matchers:
+            - name: severity
+              value: ticket
+          receiver: webhook-ticket
+          group_wait: 1m
+          repeat_interval: 12h
+
+    receivers:
+      - name: blackhole
+
+      # Remplacez les URLs par vos propres webhook.site lors de la démo
+      - name: webhook-page
+        webhook_configs:
+          - url: "https://webhook.site/REPLACE-WITH-PAGE-WEBHOOK-UUID"
+            send_resolved: true
+
+      - name: webhook-ticket
+        webhook_configs:
+          - url: "https://webhook.site/REPLACE-WITH-TICKET-WEBHOOK-UUID"
+            send_resolved: true
+
+    inhibit_rules:
+      # Une alerte `page` inhibe une alerte `ticket` sur le même service
+      # pour éviter le double bruit.
+      - source_matchers:
+          - name: severity
+            value: page
+        target_matchers:
+          - name: severity
+            value: ticket
+        equal: ["service", "namespace"]
 
 # ---- Sous-charts à désactiver sur kind ----
 # Kind ne fournit pas les endpoints standards de la control plane.

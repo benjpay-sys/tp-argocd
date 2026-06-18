@@ -15,14 +15,60 @@ dashboard:
       - /
     pathType: Prefix
 
-# Active le service de notifications utilisé en étape 10.
+# Active le service de notifications (étape 10).
+# Les URLs webhook sont injectées depuis le Secret `argo-rollouts-notification-secret`
+# créé hors-Git (kubectl create secret) pour ne pas exposer les URLs en clair.
 notifications:
-  notifiers: {}
-  # TODO étape 10 : configurez ici les webhooks (succès, échec).
-  # secret:
-  #   create: true
-  # configmap:
-  #   create: true
+  secret:
+    create: false  # Secret géré manuellement hors-Git
+
+  cm:
+    create: true
+
+  notifiers:
+    service.webhook.rollout-success: |
+      url: $webhook-success-url
+      headers:
+        - name: Content-Type
+          value: application/json
+    service.webhook.rollout-failure: |
+      url: $webhook-failure-url
+      headers:
+        - name: Content-Type
+          value: application/json
+
+  triggers:
+    trigger.on-rollout-completed: |
+      - send: [rollout-completed-success]
+        when: rollout.status.phase == "Healthy"
+    trigger.on-rollout-aborted: |
+      - send: [rollout-completed-failure]
+        when: rollout.status.phase == "Degraded"
+
+  templates:
+    template.rollout-completed-success: |
+      webhook:
+        rollout-success:
+          method: POST
+          body: |
+            {
+              "event": "Promoted",
+              "rollout": "{{ "{{" }} .rollout.metadata.name {{ "}}" }}",
+              "namespace": "{{ "{{" }} .rollout.metadata.namespace {{ "}}" }}",
+              "stable": "{{ "{{" }} .rollout.status.stableRS {{ "}}" }}",
+              "duration": "{{ "{{" }} duration .rollout.status.observedGeneration {{ "}}" }}"
+            }
+    template.rollout-completed-failure: |
+      webhook:
+        rollout-failure:
+          method: POST
+          body: |
+            {
+              "event": "Aborted",
+              "rollout": "{{ "{{" }} .rollout.metadata.name {{ "}}" }}",
+              "namespace": "{{ "{{" }} .rollout.metadata.namespace {{ "}}" }}",
+              "message": "{{ "{{" }} .rollout.status.message {{ "}}" }}"
+            }
 
 # En kind, gardez les ressources légères.
 controller:

@@ -15,8 +15,13 @@ env:
 
 monitoring:
   enabled: true
+  prometheusRule:
+    enabled: true
 
 useDeployment: false
+
+notifications:
+  enabled: true
 
 rollout:
   canary:

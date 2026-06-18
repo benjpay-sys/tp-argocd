@@ -35,6 +35,8 @@ monitoring:
     interval: 30s
     # Doit correspondre au releaseName du chart kube-prometheus-stack.
     release: kps
+  prometheusRule:
+    enabled: false
 
 # Tant que le Rollout n'est pas écrit (étape 5), le chart garde un Deployment
 # de secours pour démarrer. Passez à false dès que rollout.yaml est en place.
@@ -59,6 +61,9 @@ rollout:
       - setWeight: 50
       - pause: {duration: 30s}
       - setWeight: 100
+
+notifications:
+  enabled: false
 
 resources:
   requests:
