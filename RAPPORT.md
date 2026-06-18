@@ -500,3 +500,132 @@ deux versions simultanées ne peuvent pas gérer ; (2) on veut une validation QA
 nouvelle version avant d'exposer le moindre utilisateur réel.
 
 ---
+
+## Étape 9 — Routage avancé par header (X-Beta-User)
+
+### Objectif et mécanisme
+
+Envoyer une fraction du trafic vers la version canary non plus aléatoirement (selon le `setWeight`)
+mais sur un critère déterministe : un header HTTP `X-Beta-User: true`. Cela permet à l'équipe produit
+de tester chaque release sur ses propres comptes avant n'importe quel utilisateur réel.
+
+Mécanisme nginx-ingress : les trois annotations `canary`, `canary-by-header`, `canary-by-header-value`
+sur l'Ingress canary font que **le header gagne sur le poids** — une requête portant le header est
+toujours envoyée au canary, quelle que soit la valeur de `setWeight`.
+
+### Implémentation
+
+Ajout dans `services/annuaire/chart/templates/rollout.yaml` :
+
+```yaml
+trafficRouting:
+  nginx:
+    stableIngress: {{ include "annuaire.fullname" . }}
+    {{- if .Values.rollout.canary.headerRouting.enabled }}
+    additionalIngressAnnotations:
+      nginx.ingress.kubernetes.io/canary-by-header: {{ .Values.rollout.canary.headerRouting.header | quote }}
+      nginx.ingress.kubernetes.io/canary-by-header-value: {{ .Values.rollout.canary.headerRouting.headerValue | quote }}
+    {{- end }}
+```
+
+Valeurs par défaut dans `values.yaml` :
+
+```yaml
+rollout:
+  canary:
+    headerRouting:
+      enabled: false
+      header: X-Beta-User
+      headerValue: "true"
+```
+
+Activé dans `values-dev.yaml` :
+
+```yaml
+rollout:
+  canary:
+    headerRouting:
+      enabled: true
+```
+
+Argo Rollouts injecte ces annotations dans l'Ingress canary qu'il gère automatiquement. Le résultat
+observé sur le cluster :
+
+```
+kubectl get ingress annuaire-dev-annuaire-annuaire-dev-annuaire-canary -n devhub-dev -o yaml | grep canary
+# nginx.ingress.kubernetes.io/canary: "true"
+# nginx.ingress.kubernetes.io/canary-by-header: X-Beta-User
+# nginx.ingress.kubernetes.io/canary-by-header-value: "true"
+# nginx.ingress.kubernetes.io/canary-weight: "10"
+```
+
+### Correction préalable : SSA field ownership
+
+La démo n'était pas fonctionnelle au premier essai car `ServerSideApply=true` dans l'Application ArgoCD
+`annuaire-dev` avait donné à `argocd-controller` la propriété de `spec.selector` sur les services
+canary/stable. Argo Rollouts ne pouvait donc pas injecter `rollouts-pod-template-hash` → les deux
+services pointaient vers tous les pods → pas de split de trafic.
+
+Même fix que pour planning (étape 8) :
+
+```yaml
+# platform-sre/apps/dev/annuaire.yaml
+ignoreDifferences:
+  - group: ""
+    kind: Service
+    name: annuaire-dev-annuaire-canary
+    namespace: devhub-dev
+    jsonPointers:
+      - /spec/selector
+  - group: ""
+    kind: Service
+    name: annuaire-dev-annuaire-stable
+    namespace: devhub-dev
+    jsonPointers:
+      - /spec/selector
+syncOptions:
+  - RespectIgnoreDifferences=true
+```
+
+Après ce fix, les endpoints sont correctement séparés :
+
+```
+annuaire-dev-annuaire-canary  ENDPOINTS: 10.244.1.27:8080         (1 pod canary)
+annuaire-dev-annuaire-stable  ENDPOINTS: 10.244.1.14:8080,10.244.1.23:8080  (2 pods stable)
+```
+
+### Démonstration du routage
+
+Rollout en état Paused (step 1/7, setWeight: 10) — canary = tp3-v7, stable = tp3-v6.
+Identification de la version via le label `commit` de la métrique `annuaire_build_info`.
+
+**Sans header (trafic poids-aléatoire, ~10 % canary) :**
+
+```bash
+curl -s http://annuaire.devhub.local/metrics | grep build_info
+# annuaire_build_info{version="0.2.0",commit="tp3-v6",language="nodejs"} 1  (stable)
+# (sur 10 requêtes, ~9 arrivent sur stable, ~1 sur canary)
+```
+
+**Avec `X-Beta-User: true` (100 % canary) :**
+
+```bash
+curl -s -H "X-Beta-User: true" http://annuaire.devhub.local/metrics | grep build_info
+# annuaire_build_info{version="0.2.0",commit="tp3-v7",language="nodejs"} 1  (canary)
+# 5/5 requêtes → tp3-v7 (canary), quel que soit le setWeight
+```
+
+### Usage métier
+
+Cette technique permettrait à l'équipe produit de tester chaque release sur leurs propres comptes
+avant n'importe quel utilisateur. Le workflow serait :
+
+1. Le développeur pousse un tag → ArgoCD déclenche le canary à 10 %
+2. L'équipe produit accède via son client HTTP/browser en forçant `X-Beta-User: true`
+3. Si validé → `kubectl argo rollouts promote` pour avancer
+4. L'AnalysisTemplate prend le relai à l'étape 25 % pour la validation automatisée
+
+Combiné à `AnalysisTemplate`, le header permet une **double validation** : prévisualisation humaine
+ciblée + métriques automatisées sur le trafic réel.
+
+---
