@@ -102,15 +102,16 @@ alertmanager:
     receivers:
       - name: blackhole
 
-      # Remplacez les URLs par vos propres webhook.site lors de la démo
+      # Webhooks en-cluster (pod webhook-receiver/monitoring) — voir kubectl logs webhook-receiver -n monitoring
+      # En prod : remplacer par des URLs webhook.site ou Slack/PagerDuty réels.
       - name: webhook-page
         webhook_configs:
-          - url: "https://webhook.site/REPLACE-WITH-PAGE-WEBHOOK-UUID"
+          - url: "http://webhook-receiver.monitoring.svc.cluster.local:8080/page"
             send_resolved: true
 
       - name: webhook-ticket
         webhook_configs:
-          - url: "https://webhook.site/REPLACE-WITH-TICKET-WEBHOOK-UUID"
+          - url: "http://webhook-receiver.monitoring.svc.cluster.local:8080/ticket"
             send_resolved: true
 
     inhibit_rules:

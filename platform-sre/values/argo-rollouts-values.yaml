@@ -27,12 +27,12 @@ notifications:
 
   notifiers:
     service.webhook.rollout-success: |
-      url: $webhook-success-url
+      url: http://webhook-receiver.monitoring.svc.cluster.local:8080/rollout/success
       headers:
         - name: Content-Type
           value: application/json
     service.webhook.rollout-failure: |
-      url: $webhook-failure-url
+      url: http://webhook-receiver.monitoring.svc.cluster.local:8080/rollout/failure
       headers:
         - name: Content-Type
           value: application/json
