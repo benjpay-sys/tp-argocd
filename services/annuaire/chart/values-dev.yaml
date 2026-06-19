@@ -12,7 +12,7 @@ ingress:
 
 env:
   LOG_LEVEL: debug
-  FAIL_RATE: "0"
+  FAIL_RATE: "0.1"
 
 monitoring:
   enabled: true
