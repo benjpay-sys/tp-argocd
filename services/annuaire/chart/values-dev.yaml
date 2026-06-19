@@ -11,7 +11,7 @@ ingress:
   host: annuaire.devhub.local
 
 env:
-  LOG_LEVEL: debug
+  LOG_LEVEL: info
   FAIL_RATE: "0.1"
 
 monitoring:
