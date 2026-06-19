@@ -36,6 +36,10 @@ spec:
               value: {{ .Values.service.targetPort | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.env.LOG_LEVEL | quote }}
+            {{- if .Values.env.FAIL_RATE }}
+            - name: FAIL_RATE
+              value: {{ .Values.env.FAIL_RATE | quote }}
+            {{- end }}
             - name: METRICS_BUCKETS
               value: {{ .Values.metrics.buckets | quote }}
             - name: METRICS_BUSINESS_ENABLED
