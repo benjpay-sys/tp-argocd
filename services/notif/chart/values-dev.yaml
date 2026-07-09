@@ -4,7 +4,7 @@
 image:
   repository: host.docker.internal:5001/notif
   tag: tp3-202606170940
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 ingress:
   enabled: true

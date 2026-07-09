@@ -4,7 +4,7 @@
 image:
   repository: host.docker.internal:5001/annuaire
   tag: tp3-v7
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 ingress:
   enabled: true
